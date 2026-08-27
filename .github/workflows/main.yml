@@ -1,0 +1,62 @@
+name: نشر صدام الأفكار على GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: جلب الملفات
+        uses: actions/checkout@v4
+
+      - name: تجهيز pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: تجهيز Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: تثبيت الحزم
+        run: pnpm install --frozen-lockfile
+
+      - name: بناء الموقع
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          sed -i "s|fetch(\"/questions.json\")|fetch(\"/${REPO_NAME}/questions.json\")|" client/src/pages/Home.tsx
+          sed -i "s|defineConfig({|defineConfig({ base: '/${REPO_NAME}/',|" vite.config.ts
+          pnpm build
+
+      - name: إعداد Pages
+        uses: actions/configure-pages@v5
+
+      - name: رفع الموقع المبني
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist/public
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: النشر
+        id: deployment
+        uses: actions/deploy-pages@v4
